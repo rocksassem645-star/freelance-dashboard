@@ -1,0 +1,364 @@
+# Freelancer Dashboard — SaaS Blueprint
+> Stack: React + Tailwind + Node.js + Express + MySQL + JWT + PDFKit
+> Architecture: Onion Architecture
+> Hosting: Vercel (frontend) + Railway (backend + database)
+> Cost: $0
+
+---
+
+## The Idea
+A tool for freelancers to manage clients, projects, and invoices professionally.
+Solves the problem of scattered tracking and late payments in Egypt and the UK.
+
+---
+
+## Database Tables
+
+### users
+```sql
+CREATE TABLE users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  country VARCHAR(100),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### clients
+```sql
+CREATE TABLE clients (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255),
+  country VARCHAR(100),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### projects
+```sql
+CREATE TABLE projects (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  client_id INT NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  status VARCHAR(50) DEFAULT 'in_progress',
+  price DECIMAL(10,2),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### invoices
+```sql
+CREATE TABLE invoices (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  project_id INT NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  status VARCHAR(50) DEFAULT 'unpaid',
+  due_date DATE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+---
+
+## Folder Structure
+
+```
+freelance-dashboard/
+  client/                         ← React frontend
+    src/
+      components/                 ← Reusable UI components
+      pages/                      ← Full pages (Dashboard, Clients, etc.)
+      App.js
+      index.js
+      index.css
+    tailwind.config.js
+    package.json
+
+  server/                         ← Node.js backend (Onion Architecture)
+    src/
+      core/                       ← Pure data shapes, no frameworks
+        entities/
+          User.js
+          Client.js
+          Project.js
+          Invoice.js
+
+      application/                ← Business logic
+        useCases/
+          auth/
+            RegisterUser.js
+            LoginUser.js
+          clients/
+            CreateClient.js
+            GetClients.js
+            DeleteClient.js
+          projects/
+            CreateProject.js
+            GetProjects.js
+            UpdateProjectStatus.js
+          invoices/
+            CreateInvoice.js
+            GetInvoices.js
+            GenerateInvoicePDF.js
+
+      infrastructure/             ← Database queries, external tools
+        database/
+          db.js                   ← MySQL connection
+          UserRepository.js
+          ClientRepository.js
+          ProjectRepository.js
+          InvoiceRepository.js
+        pdf/
+          pdfGenerator.js         ← PDFKit invoice generator
+
+      routes/                     ← Express routes (HTTP layer)
+        authRoutes.js
+        clientRoutes.js
+        projectRoutes.js
+        invoiceRoutes.js
+
+    index.js                      ← Entry point
+    .env                          ← Secret keys (never push to GitHub)
+    package.json
+```
+
+---
+
+## Onion Architecture — Plain English
+
+Think of it as 4 circles inside each other:
+
+```
+[ Routes ] — HTTP layer, receives requests
+  [ Infrastructure ] — talks to database and external tools
+    [ Application ] — business logic, what the app actually does
+      [ Core ] — pure data shapes, knows nothing about the outside world
+```
+
+### The Golden Rule:
+Inner layers NEVER know about outer layers.
+- Core doesn't know about MySQL
+- Core doesn't know about Express
+- Application doesn't know about HTTP
+- Only Routes know about HTTP requests
+
+---
+
+## Stages — Build In This Order
+
+---
+
+### STAGE 1 — Server Setup
+**Goal:** Get a basic Express server running with database connection.
+
+Files to create:
+- `server/index.js` — main entry point
+- `server/src/infrastructure/database/db.js` — MySQL connection using env variables
+- `server/.env` — database credentials
+
+What it does:
+- Server runs on port 5000
+- Connects to MySQL database
+- Returns "Server is working!" on GET /
+
+---
+
+### STAGE 2 — Authentication (JWT)
+**Goal:** Users can register and login. JWT token returned on login.
+
+Files to create:
+- `server/src/core/entities/User.js` — user data shape
+- `server/src/infrastructure/database/UserRepository.js` — save/find users in DB
+- `server/src/application/useCases/auth/RegisterUser.js` — hash password, save user
+- `server/src/application/useCases/auth/LoginUser.js` — verify password, return JWT
+- `server/src/routes/authRoutes.js` — POST /register, POST /login
+
+Key concepts:
+- bcrypt for password hashing
+- jsonwebtoken for JWT generation
+- Middleware to protect routes (verify token on every request)
+
+---
+
+### STAGE 3 — Client Management
+**Goal:** Logged-in users can add, view, and delete their clients.
+
+Files to create:
+- `server/src/core/entities/Client.js`
+- `server/src/infrastructure/database/ClientRepository.js`
+- `server/src/application/useCases/clients/CreateClient.js`
+- `server/src/application/useCases/clients/GetClients.js`
+- `server/src/application/useCases/clients/DeleteClient.js`
+- `server/src/routes/clientRoutes.js` — GET /clients, POST /clients, DELETE /clients/:id
+
+Key concepts:
+- Every query filters by user_id (users only see their own clients)
+- Auth middleware on all routes
+
+---
+
+### STAGE 4 — Project Management
+**Goal:** Users can add projects to clients and update their status.
+
+Files to create:
+- `server/src/core/entities/Project.js`
+- `server/src/infrastructure/database/ProjectRepository.js`
+- `server/src/application/useCases/projects/CreateProject.js`
+- `server/src/application/useCases/projects/GetProjects.js`
+- `server/src/application/useCases/projects/UpdateProjectStatus.js`
+- `server/src/routes/projectRoutes.js`
+
+Project status options:
+- `in_progress`
+- `completed`
+- `waiting_for_payment`
+- `paid`
+
+---
+
+### STAGE 5 — Invoice Management + PDF Generation
+**Goal:** Users can create invoices and download them as PDF files.
+
+Files to create:
+- `server/src/core/entities/Invoice.js`
+- `server/src/infrastructure/database/InvoiceRepository.js`
+- `server/src/infrastructure/pdf/pdfGenerator.js` — PDFKit
+- `server/src/application/useCases/invoices/CreateInvoice.js`
+- `server/src/application/useCases/invoices/GetInvoices.js`
+- `server/src/application/useCases/invoices/GenerateInvoicePDF.js`
+- `server/src/routes/invoiceRoutes.js`
+
+Key concepts:
+- PDFKit generates a professional invoice PDF
+- GET /invoices/:id/pdf returns the PDF file as a download
+
+---
+
+### STAGE 6 — React Frontend
+**Goal:** Build the UI with React and Tailwind CSS.
+
+Pages to build:
+- `Login.js` — login form
+- `Register.js` — register form
+- `Dashboard.js` — overview stats (total clients, projects, unpaid invoices)
+- `Clients.js` — list of clients, add/delete
+- `Projects.js` — list of projects, add, update status
+- `Invoices.js` — list of invoices, create, download PDF
+
+Components to build:
+- `Navbar.js` — navigation with logout
+- `StatCard.js` — card showing a number (e.g. "5 Active Projects")
+- `ClientCard.js`
+- `ProjectCard.js`
+- `InvoiceCard.js`
+
+---
+
+### STAGE 7 — Deployment
+**Goal:** Everything live on the internet for free.
+
+- Frontend → Vercel (same as notes app)
+- Backend → Railway
+- Database → Railway MySQL
+- Environment variables set in Railway dashboard
+
+---
+
+## API Routes Summary
+
+### Auth
+| Method | Route | Description |
+|--------|-------|-------------|
+| POST | /register | Create new user |
+| POST | /login | Login, returns JWT |
+
+### Clients
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | /clients | Get all clients for logged-in user |
+| POST | /clients | Add new client |
+| DELETE | /clients/:id | Delete a client |
+
+### Projects
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | /projects | Get all projects |
+| POST | /projects | Add new project |
+| PATCH | /projects/:id/status | Update project status |
+
+### Invoices
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | /invoices | Get all invoices |
+| POST | /invoices | Create invoice |
+| GET | /invoices/:id/pdf | Download invoice as PDF |
+
+---
+
+## .env File (server)
+```
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=
+DB_NAME=freelance_dashboard
+DB_PORT=3306
+JWT_SECRET=your_secret_key_here
+PORT=5000
+```
+
+Never push this file to GitHub. Add `.env` to your `.gitignore`.
+
+---
+
+## JWT Middleware (protect all routes)
+Every route except /register and /login needs this middleware:
+
+```javascript
+const jwt = require('jsonwebtoken')
+
+const authMiddleware = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1]
+  if (!token) return res.status(401).send('No token provided')
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    req.userId = decoded.userId
+    next()
+  } catch (err) {
+    res.status(401).send('Invalid token')
+  }
+}
+
+module.exports = authMiddleware
+```
+
+---
+
+## What You'll Learn By Building This
+- Onion Architecture in a real project
+- JWT authentication (more secure than session-based)
+- PDF generation with PDFKit
+- Protected API routes with middleware
+- Environment variables and secrets management
+- Connecting React to a real backend with authentication headers
+- Full deployment pipeline — GitHub → Railway → Vercel
+
+---
+
+## Reminder — Build In Order
+1. Server setup ✅ Start here
+2. Authentication
+3. Client management
+4. Project management
+5. Invoice + PDF
+6. React frontend
+7. Deploy
+
+Don't skip stages. Each one builds on the previous.
