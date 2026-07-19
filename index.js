@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const pool = require('./src/infrastructure/database');
+const clientRoutes = require('./src/routes/clientRoutes');
 const authRoutes = require('./src/routes/authRoutes');
 
 const app = express();
@@ -23,6 +24,9 @@ pool.getConnection().then((connection) => {
 app.get('/', (req, res) => { 
   res.json({ message: "Freelancer Dashboard API is running!" });
 });
+
+// Client routes
+app.use('/api/clients', clientRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {

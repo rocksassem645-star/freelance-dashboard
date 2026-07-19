@@ -37,20 +37,20 @@ router.post("/login", async (req, res) => {
   }
 });
 
-//get current user endpoint
-router.get("/me", authMiddleware, async (res, req) => {
+// get current user endpoint - FIXED: (req, res) not (res, req)
+router.get("/me", authMiddleware, async (req, res) => {
   try {
     const userRepository = require("../infrastructure/repositories/UserRepository");
     const user = await userRepository.findById(req.user.id);
 
     if (!user) {
-        return res.status(404).json({error:'User not found'});
+      return res.status(404).json({ error: 'User not found' });
     }
     res.status(200).json({ 
-        user: user.toJSON(),
+      user: user.toJSON(),
     });
   } catch (err) { 
-    res.status(500).json({error: err.message});
+    res.status(500).json({ error: err.message });
   }
 });
 

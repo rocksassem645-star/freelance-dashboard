@@ -1,6 +1,6 @@
-    
+// server/src/infrastructure/repositories/ClientRepository.js
 const db = require('../database');
-const Client = require('../../core/entities/Client');
+const Client = require('../../core/entities/Client');  // ← Make sure this path is correct!
 
 class ClientRepository {
   async create(client) {
