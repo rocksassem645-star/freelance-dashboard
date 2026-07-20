@@ -1,11 +1,11 @@
-// server/src/infrastructure/middleware/authMiddleware.js
 const { verify } = require("jsonwebtoken");
 const authUseCase = require("../../application/usecases/AuthUseCase");
+const logger = require("../logger");  // Use proper logging
 
-// middleware to verify jwt tokens
+// Middleware to verify JWT tokens
 const authMiddleware = (req, res, next) => {
   try {
-    // get token from authorization header
+    // Get token from authorization header
     const authHeader = req.headers['authorization'];
 
     if (!authHeader) {
@@ -13,28 +13,31 @@ const authMiddleware = (req, res, next) => {
     }
 
     // Extract token: format should be "Bearer <token>"
-    // Check for "Bearer " with capital B and space
     let token;
-    if (authHeader.startsWith('Bearer ')) {  // ← FIXED: capital B, includes space
-      token = authHeader.slice(7);           // Remove "Bearer "
+    if (authHeader.startsWith('Bearer ')) {
+      token = authHeader.slice(7);
     } else {
-      // If no "Bearer " prefix, assume the whole header is the token
-      token = authHeader;
+      return res.status(401).json({ error: 'Invalid token format' });
     }
 
-    console.log('🔑 Token received:', token.substring(0, 20) + '...');
+    // Check if token is blacklisted (revoked)
+    if (authUseCase.isTokenBlacklisted(token)) {
+      return res.status(401).json({ error: 'Token has been revoked' });
+    }
 
-    // verify token using authUseCase
+    // Verify token
     const decoded = authUseCase.verifyToken(token);
 
-    console.log('✅ Token verified for user:', decoded.id);
-
-    // attach user info to request
+    // Attach user info to request
     req.user = decoded;
     next();
 
   } catch (err) {
-    console.error('❌ Auth error:', err.message);
+    logger.warn('Token verification failed:', { 
+      error: err.message,
+      ip: req.ip 
+    });
+    
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 };
