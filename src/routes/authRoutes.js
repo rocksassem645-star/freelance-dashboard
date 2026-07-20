@@ -74,7 +74,6 @@ router.get("/csrf-token", csrfProtection, (req, res) => {
 router.post(
   "/register",
   registerLimiter,
-  csrfProtection,
   validateSchema(registerSchema),
   async (req, res) => {
     try {

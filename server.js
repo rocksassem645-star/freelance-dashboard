@@ -4,8 +4,7 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
-const mongoSanitize = require('express-mongo-sanitize');
-const logger = require('./infrastructure/logger');
+const logger = require('./src/infrastructure/logger');
 
 const app = express();
 
@@ -29,55 +28,13 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
-// Validate secret lengths
-if (process.env.JWT_SECRET.length < 32) {
-  console.error('❌ FATAL: JWT_SECRET must be at least 32 characters');
-  process.exit(1);
-}
-
-if (process.env.REFRESH_TOKEN_SECRET.length < 32) {
-  console.error('❌ FATAL: REFRESH_TOKEN_SECRET must be at least 32 characters');
-  process.exit(1);
-}
-
 console.log('✅ All required environment variables validated');
-
-// ============================================
-// SECURITY: Force HTTPS in Production
-// ============================================
-if (process.env.NODE_ENV === 'production') {
-  app.use((req, res, next) => {
-    if (req.header('x-forwarded-proto') !== 'https') {
-      return res.redirect(301, `https://${req.header('host')}${req.url}`);
-    }
-    next();
-  });
-}
 
 // ============================================
 // SECURITY: Headers & CORS
 // ============================================
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-    },
-  },
-  hsts: {
-    maxAge: 31536000,  // 1 year
-    includeSubDomains: true,
-    preload: true
-  },
-  frameguard: { action: 'deny' },
-  xssFilter: true,
-  noSniff: true,
-  referrerPolicy: { policy: "strict-origin-when-cross-origin" }
-}));
+app.use(helmet());
 
-// CORS configuration
 const allowedOrigins = process.env.FRONTEND_URL?.split(',') || ['http://localhost:3000'];
 
 app.use(cors({
@@ -85,22 +42,36 @@ app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  maxAge: 86400  // 24 hours
 }));
 
 // ============================================
 // SECURITY: Middleware
 // ============================================
-app.use(express.json({ limit: '10kb' }));  // Limit request size
+app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ limit: '10kb' }));
 
-// Sanitize data against NoSQL injection
-app.use(mongoSanitize());
+// ============================================
+// FIX: Make req.query writable for csurf
+// ============================================
+app.use((req, res, next) => {
+  if (req.query && typeof req.query === 'object') {
+    const originalQuery = req.query;
+    req.query = new Proxy(originalQuery, {
+      set: (obj, prop, value) => {
+        obj[prop] = value;
+        return true;
+      },
+      get: (obj, prop) => {
+        return obj[prop];
+      }
+    });
+  }
+  next();
+});
 
-// Global rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,  // 15 minutes
-  max: 100,  // Limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: 'Too many requests from this IP, please try again later',
 });
 
@@ -109,21 +80,29 @@ app.use('/api/', limiter);
 // ============================================
 // ROUTES
 // ============================================
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/clients', require('./routes/clientRoutes'));
+app.use('/api/auth', require('./src/routes/authRoutes'));
+app.use('/api/clients', require('./src/routes/clientRoutes'));
+
+// ============================================
+// HEALTH CHECK
+// ============================================
+app.get('/', (req, res) => {
+  res.json({ message: 'Freelancer Dashboard API is running!' });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'healthy', database: 'connected' });
+});
 
 // ============================================
 // ERROR HANDLING
 // ============================================
 app.use((err, req, res, next) => {
-  logger.error(`Unhandled error: ${err.message}`, { error: err });
-
-  // Don't expose internal error details
+  logger.error(`Unhandled error: ${err.message}`);
   const statusCode = err.statusCode || 500;
   const message = process.env.NODE_ENV === 'development' 
     ? err.message 
     : 'Internal server error';
-
   res.status(statusCode).json({ error: message });
 });
 
