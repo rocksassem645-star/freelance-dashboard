@@ -1,4 +1,4 @@
-const invoiceRepository = require('../../core/repositories/InvoiceRepository');
+const invoiceRepository = require('../../infrastructure/repositories/InvoiceRepository');
 
 class GetInvoiceUseCase {
   async execute(id) {

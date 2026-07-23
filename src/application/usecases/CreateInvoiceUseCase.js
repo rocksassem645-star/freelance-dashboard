@@ -1,5 +1,5 @@
 const Invoice = require('../../core/entities/Invoice');
-const invoiceRepository = require('../../core/repositories/InvoiceRepository');
+const invoiceRepository = require('../../infrastructure/repositories/InvoiceRepository');
 
 class CreateInvoiceUseCase {
   async execute(

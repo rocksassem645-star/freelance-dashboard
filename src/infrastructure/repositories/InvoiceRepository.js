@@ -1,5 +1,5 @@
 const db = require('../../infrastructure/database');
-const Invoice = require('../entities/Invoice');
+const Invoice = require('../../core/entities/Invoice');
 
 class InvoiceRepository {
   async create(invoice) {
