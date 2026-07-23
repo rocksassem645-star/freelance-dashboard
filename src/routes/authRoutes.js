@@ -15,7 +15,7 @@ const csrfProtection = csrf({ cookie: true });
 // Rate limiters
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,  // 1 hour
-  max: 3,                     // 3 registrations per hour per IP
+  max: 100,                     //  registrations per hour per IP
   message: "Too many accounts created, try again later",
   standardHeaders: true,
   legacyHeaders: false,
